@@ -1,0 +1,284 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+"""
+Life Simulator
+author: Craig Warner
+"""
+
+# External Imports
+import os
+import platform
+import sys
+import argparse
+import hjson
+import time
+import random 
+
+
+from enum import IntEnum
+
+# GUI  Imports
+from PyQt5 import (QtWidgets, QtCore)
+from PyQt5.QtWidgets import (
+    QMainWindow, QApplication,
+    QLabel, QCheckBox, QComboBox, QListWidget, QListWidgetItem, QLineEdit,
+    QLineEdit, QSpinBox, QDoubleSpinBox, QSlider,
+    QHBoxLayout, QVBoxLayout, QToolBar, QAction, QStatusBar,
+    QDialog, QDialogButtonBox, QFileDialog, QWidget, QProgressBar
+)
+from PyQt5.QtCore import ( 
+    Qt, QRect, QObject, QThread, pyqtSignal,QTimer
+)
+from PyQt5.QtGui import ( 
+    QPainter, QColor, QFont, QPixmap, QPen,QBrush
+)
+
+# TwisterSpinner Imports  
+from version import __version__
+
+class Mode(IntEnum):
+    Seed = 1
+    Play = 2
+
+
+class CanvasWidget(QWidget):
+    def __init__(self,parent,width,height):
+        super(CanvasWidget, self).__init__(parent)
+        if args.verbose:
+            print("Canvas Widget")
+        self.setGeometry(QRect(0, 0, width, height))
+        self.parent = parent
+
+        self.label = QLabel()
+        self.cvs = QPixmap(width, height)
+        self.cvs.fill(Qt.black)
+        self.label.setPixmap(self.cvs)
+
+        self.mouseClick = False
+
+        self.lifeformImages = []
+        lifeforms = ['ameba64', 'flower64' , 'isu64', 'mandel64',  'peace64']
+        if args.verbose:
+            print("Loading Images...")
+        for pname in lifeforms:
+            imgFileName = topPath+"/images/lifeforms/"+pname+".png"
+            self.lifeformImages.append(QPixmap(imgFileName))
+        self.iconImages = []
+        icons = ['zoom_in_blue', 'zoom_out_blue']
+        for pname in icons:
+            imgFileName = topPath+"/images/icons/"+pname+".png"
+            self.iconImages.append(QPixmap(imgFileName))
+
+    def paintEvent(self, e):
+        #print("Paint")
+        qp = QPainter()
+        qp.begin(self)
+        qp.drawPixmap(0,0,self.cvs)
+        qp.end()
+
+    def mousePressEvent(self,event):
+        self.mouseClick = True
+
+    def DrawLife(self,x,y,w,h,lifeform_num):
+        qp_pm = QPainter(self.cvs)
+        qp_pm.drawPixmap(x,y,w,h,self.lifeform_num)
+        qp_pm.end()
+        self.repaint()
+
+    def ClearCanvas(self):
+        self.cvs.fill(Qt.black)
+
+    def IsMouseClick(self):
+        if(self.mouseClick):
+            self.mouseClick = False
+            return(True)
+        else:
+            return(False)
+
+class AboutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Like Simulator")
+
+        QBtn = QDialogButtonBox.Ok 
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+
+        self.layout = QVBoxLayout()
+
+        message_str = "Life Simulator\nVersion: %s\n" % (__version__)
+        message_str = message_str + "Copyright 2023 Craig Warner all rights reserved."
+        message = QLabel(message_str)
+        self.layout.addWidget(message)
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)
+
+class SettingsDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Life Simulator Settings")
+
+        QBtn = QDialogButtonBox.Ok 
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)
+
+class MainWindow(QMainWindow):
+
+    def __init__(self,topPath,width,height):
+        super(MainWindow, self).__init__()
+
+        self.screenWidth = width
+        self.screenHeight= height 
+        # Interval Timer Tick
+        self.iTick = 0
+        # Other variables
+        self.iPass = True
+        self.bShowIntro = True,
+        self.canvasWidth = self.screenWidth -100  
+        self.canvasHeight = self.screenHeight -100 
+        # Start the GUI 
+        self.initUI()
+        self.initTick()
+
+    def initUI(self):
+        self.wid = QtWidgets.QWidget(self)
+        self.setCentralWidget(self.wid)
+        self.setGeometry(0,0,self.canvasWidth,self.canvasHeight) 
+        self.setFixedSize(self.canvasWidth,self.canvasHeight)
+        self.setWindowTitle("Life Simulator")
+        self.createActions()
+        self.addMenuToWindow()
+        self.addBody()
+        self.show()
+
+    def createActions(self):
+        self.playAction= QAction()
+        self.playAction.setText("Play")
+        self.settingsAction= QAction()
+        self.settingsAction.setText("Settings")
+        self.exitAppAction= QAction()
+        self.exitAppAction.setText("Quit")
+
+        self.aboutAction= QAction()
+        self.aboutAction.setText("About")
+
+    def addMenuToWindow(self):
+
+        menu = self.menuBar()
+        file_menu = menu.addMenu("&File")
+        file_menu.addAction(self.playAction)
+#        file_menu.addAction(self.settingsAction)
+        file_menu.addSeparator()
+        file_menu.addAction(self.exitAppAction)
+
+        help_menu = menu.addMenu("&Help")
+        help_menu.addAction(self.aboutAction)
+
+        self.playAction.triggered.connect(self.doPlay)
+#        self.settingsAction.triggered.connect(self.doSettings)
+        self.exitAppAction.triggered.connect(self.doExitApp)
+        self.aboutAction.triggered.connect(self.doAbout)
+
+    def doPlay(self):
+        global template
+        self.mode = Mode.Play
+        self.iTick = 0
+        if(args.verbose):
+            print("Play")
+
+    def doSettings(self):
+        if(args.verbose):
+            print("Settings")
+        dlg = SettingsDialog(self)
+        dlg.exec()
+
+    def doExitApp(self):
+        if(args.verbose):
+            print("Exit")
+        exit(0)
+
+    def doAbout(self):
+        if(args.verbose):
+           print("About")
+        dlg = AboutDialog(self)
+        dlg.exec()
+
+    def addBody(self):
+        vbox1 = QtWidgets.QVBoxLayout()
+        self.canvas = CanvasWidget(self,self.canvasWidth, self.canvasHeight)
+        vbox1.addWidget(self.canvas)
+        self.wid.setLayout(vbox1)
+
+
+    def initTick(self):
+        # timer which repate function `display_time` every 1000ms (1s)
+        self.iTick = 0
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.DoTick)  # execute `display_time`
+#        self.timer.setInterval(1000)  # 1000ms = 1s
+        self.timer.setInterval(100)  # 1000ms = 1s
+        self.timer.start()
+        self.mode = Mode.Seed
+
+    def DoTick(self):
+        #print("Tick", self.iTick)
+        if self.canvas.IsMouseClick():
+            self.iTick = 0
+            if self.mode == Mode.Seed:
+                self.mode = Mode.Play
+            else:
+                self.mode = Mode.Seed
+        elif self.mode == Mode.Play:
+            if(self.iTick == 0):
+                self.ClearCanvas(); 
+                # Touch Screen to Start
+            else:
+                self.ClearCanvas(); 
+            self.iTick = self.iTick + 1 
+#
+# Helper Functions 
+#
+
+def playLife():
+    print("Does not make sense to run without GUI")
+    exit(1)
+
+#
+# mbg Start
+#
+#topPath = "/home/craigwarner/Programming/lv1/life-sim"
+topPath = "/snap/life-sim/current"
+
+# CLI Parser
+parser = argparse.ArgumentParser(description='Life Simulator')
+parser.add_argument("-v", "--verbose", help="Increase output verbosity",action ="store_true") 
+parser.add_argument("--nogui", help="No Graphical User Interface",action ="store_true") 
+parser.add_argument('-V', '--version', action='version', version="%(prog)s ("+__version__+")")
+args = parser.parse_args()
+
+# Gui or Not
+if(args.nogui):
+    playLife()
+else:
+    app = QApplication(sys.argv)
+    screen = app.primaryScreen()
+    if args.verbose:
+        print('Screen: %s' % screen.name())
+    size = screen.size()
+    if args.verbose:
+        print('Size: %d x %d' % (size.width(), size.height()))
+    rect = screen.availableGeometry()
+    if args.verbose:
+        print('Available: %d x %d' % (rect.width(), rect.height()))
+    w = MainWindow(topPath,rect.width(),rect.height())
+    w.show()
+    app.exec()
