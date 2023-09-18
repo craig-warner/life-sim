@@ -33,7 +33,6 @@ parts:
       - try: [appmenu-qt5] # not available on core18
       - locales-all
       - xdg-user-dirs
-      - ffmpeg
 
   mainapp:
     after: [desktop-qt5]
@@ -44,6 +43,7 @@ parts:
     stage-packages:
     - python-six
     - python3-pyqt5
+    - python-json-tricks
    
   images:
     after: [mainapp]

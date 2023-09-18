@@ -145,6 +145,8 @@ class MainWindow(QMainWindow):
         self.bShowIntro = True,
         self.canvasWidth = self.screenWidth -100  
         self.canvasHeight = self.screenHeight -100 
+        # Pattern
+        self.LoadPatterns()
         # Start the GUI 
         self.initUI()
         self.initTick()
@@ -229,6 +231,15 @@ class MainWindow(QMainWindow):
         self.timer.start()
         self.mode = Mode.Seed
 
+    def LoadPatterns(self):
+        fname = topPath + "patterns/glider.hjson"
+        self.pattern_gliders= hjson.load(open(fname))
+        fname = topPath + "patterns/glidergun.hjson"
+        self.pattern_glider_gun= hjson.load(open(fname))
+        fname = topPath + "patterns/pulsars.hjson"
+        self.pattern_pulsars= hjson.load(open(fname))
+           
+
     def DoTick(self):
         #print("Tick", self.iTick)
         if self.canvas.IsMouseClick():
@@ -255,8 +266,8 @@ def playLife():
 #
 # mbg Start
 #
-#topPath = "/home/craigwarner/Programming/lv1/life-sim"
-topPath = "/snap/life-sim/current"
+#topPath = "/home/craigwarner/Programming/lv4/life-sim/"
+topPath = "/snap/life-sim/current/"
 
 # CLI Parser
 parser = argparse.ArgumentParser(description='Life Simulator')
