@@ -755,8 +755,8 @@ def playLife():
 #
 # mbg Start
 #
-topPath = "/home/craigwarner/Programming/lv4/life-sim/"
-#topPath = "/snap/life-sim/current/"
+#topPath = "/home/craigwarner/Programming/lv4/life-sim/"
+topPath = "/snap/life-sim/current/"
 
 # CLI Parser
 parser = argparse.ArgumentParser(description='Life Simulator')
