@@ -70,11 +70,14 @@ class CanvasWidget(QWidget):
         for pname in lifeforms:
             imgFileName = topPath+"/images/lifeforms/"+pname+".png"
             self.lifeformImages.append(QPixmap(imgFileName))
+
         self.iconImages = []
         icons = ['zoom_in_blue', 'zoom_out_blue']
         for pname in icons:
             imgFileName = topPath+"/images/icons/"+pname+".png"
             self.iconImages.append(QPixmap(imgFileName))
+
+        self.DrawLife(0,0)
 
     def paintEvent(self, e):
         #print("Paint")
@@ -88,14 +91,12 @@ class CanvasWidget(QWidget):
 
     def DrawLife(self,x,y):
         i_num = self.parent.life_item_num
-        if args.verbose:
-            print("Draw Life:",x,":",y,":",i_num)
+        #if args.verbose:
+        #    print("Draw Life:",x,":",y,":",i_num)
         qp_pm = QPainter(self.cvs)
-        #i_num = self.parent.life_item_num
         side = self.parent.viewPxPerCellSide
         qp_pm.drawPixmap(x,y,side,side,self.lifeformImages[i_num])
         qp_pm.end()
-        self.repaint()
 
     def DrawBg(self,x,y):
 #        if args.verbose:
@@ -112,9 +113,9 @@ class CanvasWidget(QWidget):
         side = self.parent.viewPxPerCellSide
         qp_pm.drawRect(x,y,side,side)
         qp_pm.end()
-        self.repaint()
 
     def ClearCanvas(self):
+        #print("ClearCanvas")
         self.cvs.fill(Qt.black)
 
     def IsMouseClick(self):
@@ -125,13 +126,11 @@ class CanvasWidget(QWidget):
             return(False)
 
     def CalcY(self,row):
-        y_pos = self.parent.viewFirstRow * self.parent.viewPxPerCellSide
-        y_pos = y_pos + row * self.parent.viewPxPerCellSide
+        y_pos = row * self.parent.viewPxPerCellSide
         return (y_pos)
 
     def CalcX(self,col):
-        x_pos = self.parent.viewFirstCol * self.parent.viewPxPerCellSide
-        x_pos = x_pos + col * self.parent.viewPxPerCellSide
+        x_pos = col * self.parent.viewPxPerCellSide
         return (x_pos)
        
     def DrawCurGen(self):
@@ -141,10 +140,12 @@ class CanvasWidget(QWidget):
                 check_row = row + self.parent.viewFirstRow
                 y = self.CalcY(row)
                 x = self.CalcX(col)
+                #print("r",check_row,"c",check_col)
                 if(self.parent.pool[check_row][check_col] != 0):
                     self.DrawLife(x,y)
                 else:
                     self.DrawBg(x,y)
+        self.repaint()
 
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
@@ -310,8 +311,6 @@ class InitialSettingsDialog(QDialog):
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)        
   
-        # adding signal and slot 
-        self.pushButton.clicked.connect(self.changelabeltext)
 
     def doChangeSelection(self):
         initial_item_num = self.initial_list_widget.currentRow()
@@ -343,17 +342,18 @@ class MainWindow(QMainWindow):
         self.screenHeight= height 
 
         #  View 
-        self.zoomValue = 1
-        if(width > height):
-            minPxPerSide = height // self.cellsPerSide
-        else:
-            print("Screen Size Not Supported")
-            exit(1)
-
-        self.viewPxPerCellSide = minPxPerSide * 2 
         self.viewCellsPerSide = 64
         self.viewFirstCol= 64
         self.viewFirstRow= 64
+
+        self.zoomValue = 1
+        if(width < height):
+            print("Screen Size Not Supported")
+            exit(1)
+
+        minPxPerSide = height // self.cellsPerSide
+
+        self.viewPxPerCellSide = minPxPerSide * 2 
 
         self.poolWidth = self.viewPxPerCellSide * self.viewCellsPerSide
         self.poolHeight= self.poolWidth
@@ -459,6 +459,7 @@ class MainWindow(QMainWindow):
             print("Initial Settings")
         dlg = InitialSettingsDialog(self)
         dlg.exec()
+        self.UpdatePool(False)
 
     def doExitApp(self):
         if(args.verbose):
@@ -526,7 +527,7 @@ class MainWindow(QMainWindow):
         self.iTick = 0
         self.timer = QTimer()
         self.timer.timeout.connect(self.DoTick)  # execute `display_time`
-        self.timer.setInterval(1000)  # 100ms
+        self.timer.setInterval(100)  # 100ms
         self.timer.start()
         self.mode = Mode.Seed
 
@@ -539,8 +540,8 @@ class MainWindow(QMainWindow):
         self.pattern_pulsars= hjson.load(open(fname))
 
     def DoTick(self):
-        if(args.verbose):
-            print("Tick")
+#        if(args.verbose):
+#            print("Tick")
 
         #print("Tick", self.iTick)
 #        if self.canvas.IsMouseClick():
@@ -568,7 +569,7 @@ class MainWindow(QMainWindow):
         #self.UpdatePool(True)
 
     def DrawCurrentGen(self):
-        self.canvas.DrawCurrentGen()
+        self.canvas.DrawCurGen()
 
     def DoMoveLeft(self):
         if(args.verbose):
@@ -602,12 +603,13 @@ class MainWindow(QMainWindow):
         if(args.verbose):
             print("Zoom Out")
         if(self.zoomValue > 0 ): 
-            self.viewCellsPerSide = self.viewCellsPerSide // 2 
+            self.viewCellsPerSide = self.viewCellsPerSide * 2 
             self.zoomValue = self.zoomValue - 1
+            self.viewPxPerCellSide = self.viewPxPerCellSide // 2 
         # Adjust to not roll off edge
-        if(self.viewFirstCol + self.viewCellsPerSide > self.cellsPerSide):
+        if(self.viewFirstCol + self.viewCellsPerSide >= self.cellsPerSide):
             self.viewFirstCol = self.cellsPerSide - self.viewCellsPerSide
-        if(self.viewFirstRow + self.viewCellsPerSide > self.cellsPerSide):
+        if(self.viewFirstRow + self.viewCellsPerSide >= self.cellsPerSide):
             self.viewFirstRow = self.cellsPerSide - self.viewCellsPerSide
         self.DrawCurrentGen()
 
@@ -615,8 +617,9 @@ class MainWindow(QMainWindow):
         if(args.verbose):
             print("Zoom In")
         if(self.zoomValue < 4 ): 
-            self.viewCellsPerSide = self.viewCellsPerSide * 2 
+            self.viewCellsPerSide = self.viewCellsPerSide // 2 
             self.zoomValue = self.zoomValue + 1
+            self.viewPxPerCellSide = self.viewPxPerCellSide * 2 
         self.DrawCurrentGen()
 
     def DoReset(self):
@@ -646,6 +649,7 @@ class MainWindow(QMainWindow):
                 if(nextGen): # Next Gen
                     self.pool[row][col] = self.next_gen_pool[row][col]
                 else:
+                    #print("pattern",row,":")
                     # Reset
                     if(self.initial_item_num == 0):
                         rand_num = random.randrange(0,100)
@@ -654,11 +658,11 @@ class MainWindow(QMainWindow):
                         else:
                             self.pool[row][col] = 0
                     elif(self.initial_item_num == 1):
-                        self.pool[row][col] = self.pattern_gliders[row][col]
+                        self.pool[row][col] = self.pattern_gliders["pattern"][row][col]
                     elif(self.initial_item_num == 2):
-                        self.pool[row][col] = self.pattern_glider_gun[row][col]
+                        self.pool[row][col] = self.pattern_glider_gun["pattern"][row][col]
                     elif(self.initial_item_num == 3):
-                        self.pool[row][col] = self.pattern_pulsars[row][col]
+                        self.pool[row][col] = self.pattern_pulsars["pattern"][row][col]
 
     # 
     # The John Conway Life Algorithm
