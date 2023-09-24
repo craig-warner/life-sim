@@ -47,7 +47,7 @@ class CanvasWidget(QWidget):
     def __init__(self,parent,width,height):
         super(CanvasWidget, self).__init__(parent)
         if args.verbose:
-            print("Canvas Widget")
+            print("Canvas Widget:",width,height)
         self.setGeometry(QRect(0, 0, width, height))
         self.parent = parent
 
@@ -87,16 +87,21 @@ class CanvasWidget(QWidget):
         self.mouseClick = True
 
     def DrawLife(self,x,y):
-        qp_pm = QPainter(self.cvs)
         i_num = self.parent.life_item_num
-        side = self.parent.viewPixelsPerLifeSide
+        if args.verbose:
+            print("Draw Life:",x,":",y,":",i_num)
+        qp_pm = QPainter(self.cvs)
+        #i_num = self.parent.life_item_num
+        side = self.parent.viewPxPerCellSide
         qp_pm.drawPixmap(x,y,side,side,self.lifeformImages[i_num])
         qp_pm.end()
         self.repaint()
 
     def DrawBg(self,x,y):
+#        if args.verbose:
+#            print("Draw Bg:",x,":",y)
         qp_pm = QPainter(self.cvs)
-        i_num = self.parent.life_item_num
+        inum = self.parent.life_item_num
         color = self.lifeformBgColors[inum]
         red =  (color >> 16) & int("0xff",16)
         green =  (color >> 8) & int("0xff",16)
@@ -104,7 +109,7 @@ class CanvasWidget(QWidget):
         qcolor = QColor(red,green,blue)
         qp_pm.setPen(QPen(qcolor))
         qp_pm.setBrush(QBrush(qcolor, Qt.SolidPattern))
-        side = self.parent.viewPixelsPerLifeSide
+        side = self.parent.viewPxPerCellSide
         qp_pm.drawRect(x,y,side,side)
         qp_pm.end()
         self.repaint()
@@ -119,7 +124,7 @@ class CanvasWidget(QWidget):
         else:
             return(False)
 
-    def Calcy(self,row):
+    def CalcY(self,row):
         y_pos = self.parent.viewFirstRow * self.parent.viewPxPerCellSide
         y_pos = y_pos + row * self.parent.viewPxPerCellSide
         return (y_pos)
@@ -136,7 +141,7 @@ class CanvasWidget(QWidget):
                 check_row = row + self.parent.viewFirstRow
                 y = self.CalcY(row)
                 x = self.CalcX(col)
-                if(self.parent.pool[row][col] != 0):
+                if(self.parent.pool[check_row][check_col] != 0):
                     self.DrawLife(x,y)
                 else:
                     self.DrawBg(x,y)
@@ -330,9 +335,9 @@ class MainWindow(QMainWindow):
                 ia_row.append(0)
                 a_row.append(0)
                 nga_row.append(0)
-            self.pool.append(ia_row)
+            self.initial_pool.append(ia_row)
             self.pool.append(a_row)
-            self.pool.append(nga_row)
+            self.next_gen_pool.append(nga_row)
 
         self.screenWidth = width
         self.screenHeight= height 
@@ -348,7 +353,7 @@ class MainWindow(QMainWindow):
         self.viewPxPerCellSide = minPxPerSide * 2 
         self.viewCellsPerSide = 64
         self.viewFirstCol= 64
-        self.viewFirstRol= 64
+        self.viewFirstRow= 64
 
         self.poolWidth = self.viewPxPerCellSide * self.viewCellsPerSide
         self.poolHeight= self.poolWidth
@@ -375,6 +380,8 @@ class MainWindow(QMainWindow):
         self.initial_item_num = 0
         self.initial_random_thresh = 90 # 1 - 99; higher less life 
         self.LoadPatterns()
+        # First seed
+        self.UpdatePool(False)
         # Start the GUI 
         self.initUI()
         self.initTick()
@@ -391,8 +398,8 @@ class MainWindow(QMainWindow):
         self.show()
 
     def createActions(self):
-        self.playAction= QAction()
-        self.playAction.setText("Simulate")
+        #self.playAction= QAction()
+        #self.playAction.setText("Simulate")
         self.timeSettingsAction= QAction()
         self.timeSettingsAction.setText("Time Settings")
         self.lifeSettingsAction= QAction()
@@ -409,19 +416,19 @@ class MainWindow(QMainWindow):
 
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
-        file_menu.addAction(self.playAction)
+        #file_menu.addAction(self.playAction)
         file_menu.addAction(self.timeSettingsAction)
         file_menu.addAction(self.lifeSettingsAction)
         file_menu.addAction(self.initialSettingsAction)
         file_menu.addSeparator()
-        file_menu.addAction(self.aboutAction)
-        file_menu.addSeparator()
+        #file_menu.addAction(self.aboutAction)
+        #file_menu.addSeparator()
         file_menu.addAction(self.exitAppAction)
 
         help_menu = menu.addMenu("&Help")
         help_menu.addAction(self.aboutAction)
 
-        self.playAction.triggered.connect(self.doPlay)
+        #self.playAction.triggered.connect(self.doPlay)
         self.timeSettingsAction.triggered.connect(self.doTimeSettings)
         self.lifeSettingsAction.triggered.connect(self.doLifeSettings)
         self.initialSettingsAction.triggered.connect(self.doInitialSettings)
@@ -498,6 +505,16 @@ class MainWindow(QMainWindow):
         self.zoomOutButton.clicked.connect(self.DoZoomOut)
         vbox1.addWidget(self.zoomOutButton)
 
+        # Reset
+        self.resetButton = QPushButton("Reset")
+        self.resetButton.clicked.connect(self.DoReset)
+        vbox1.addWidget(self.resetButton)
+
+        # Start / Stop 
+        self.ssTimeButton = QPushButton("Start Time")
+        self.ssTimeButton.clicked.connect(self.DoSSTime)
+        vbox1.addWidget(self.ssTimeButton)
+
         self.canvas = CanvasWidget(self,self.poolWidth, self.poolHeight)
         hbox1.addWidget(self.canvas)
         hbox1.addLayout(vbox1)
@@ -509,7 +526,7 @@ class MainWindow(QMainWindow):
         self.iTick = 0
         self.timer = QTimer()
         self.timer.timeout.connect(self.DoTick)  # execute `display_time`
-        self.timer.setInterval(100)  # 100ms
+        self.timer.setInterval(1000)  # 100ms
         self.timer.start()
         self.mode = Mode.Seed
 
@@ -522,14 +539,17 @@ class MainWindow(QMainWindow):
         self.pattern_pulsars= hjson.load(open(fname))
 
     def DoTick(self):
+        if(args.verbose):
+            print("Tick")
+
         #print("Tick", self.iTick)
-        if self.canvas.IsMouseClick():
-            self.iTick = 0
-            if self.mode == Mode.Seed:
-                self.mode = Mode.Play
-            else:
-                self.mode = Mode.Seed
-        elif self.mode == Mode.Play:
+#        if self.canvas.IsMouseClick():
+#            self.iTick = 0
+#            if self.mode == Mode.Seed:
+#                self.mode = Mode.Play
+#            else:
+#                self.mode = Mode.Seed
+        if self.mode == Mode.Play:
             if(self.iTick == 0):
                 self.ClearCanvas(); 
             else:
@@ -539,10 +559,13 @@ class MainWindow(QMainWindow):
                     if((self.iTick % self.ticks_per_step) == 0):
                         self.DoStep()
             self.iTick = self.iTick + 1 
+        self.canvas.DrawCurGen()
 
     def DoStep(self):
         if(args.verbose):
             print("Step")
+        self.AdvanceOneGen()
+        #self.UpdatePool(True)
 
     def DrawCurrentGen(self):
         self.canvas.DrawCurrentGen()
@@ -596,6 +619,21 @@ class MainWindow(QMainWindow):
             self.zoomValue = self.zoomValue + 1
         self.DrawCurrentGen()
 
+    def DoReset(self):
+        if(args.verbose):
+            print("Reset")
+        self.UpdatePool(False)
+        
+    def DoSSTime(self):
+        if(args.verbose):
+            print("SS Time")
+        if self.mode == Mode.Play:
+            self.mode = Mode.Seed
+            self.ssTimeButton.setText("Start Time")
+        else:
+            self.mode = Mode.Play
+            self.ssTimeButton.setText("Stop Time")
+
     def ClearCanvas(self):
         if(args.verbose):
             print("Clear Canvas")
@@ -631,6 +669,7 @@ class MainWindow(QMainWindow):
         sum = 0
         for y in range (0,self.cellsPerSide):
             for x in range (0,self.cellsPerSide):
+                #print("X:",x,"Y:",y)
                 sum = 0
                 sum+=self.TestPoint(x-1,y-1)
                 sum+=self.TestPoint(x-1,y)
@@ -641,20 +680,20 @@ class MainWindow(QMainWindow):
                 sum+=self.TestPoint(x+1,y)
                 sum+=self.TestPoint(x+1,y+1)
 
-        if(self.pool[x][y] == 1):
-            if((sum == 2) or (sum == 3)):
-                noLife = False
-                self.next_gen_pool[x][y] = 1
-            else:
-                noChange = False
-                self.next_gen_pool[x][y] = 0
-        else:
-            if(sum == 3):
-                noLife = False
-                noChange = False
-                self.next_gen_pool[x][y] = 1
-            else:
-                self.NextGen[x][y] = 0
+                if(self.pool[x][y] == 1):
+                    if((sum == 2) or (sum == 3)):
+                        noLife = False
+                        self.next_gen_pool[x][y] = 1
+                    else:
+                        noChange = False
+                        self.next_gen_pool[x][y] = 0
+                else:
+                    if(sum == 3):
+                        noLife = False
+                        noChange = False
+                        self.next_gen_pool[x][y] = 1
+                    else:
+                        self.next_gen_pool[x][y] = 0
 	    # No Life Reset
         if((self.noLifeReset == True) and (noLife == True)):
             self.UpdatePool(False)
@@ -666,7 +705,7 @@ class MainWindow(QMainWindow):
             self.UpdatePool(True)
 
     def TestPoint(self,x,y):
-#	    ForceZero = False
+        ForceZero = False
         if x<0 :
             if(self.wrapX == False):
                 realx = 0
