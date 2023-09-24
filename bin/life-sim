@@ -23,9 +23,10 @@ from PyQt5 import (QtWidgets, QtCore)
 from PyQt5.QtWidgets import (
     QMainWindow, QApplication,
     QLabel, QCheckBox, QComboBox, QListWidget, QListWidgetItem, QLineEdit,
-    QLineEdit, QSpinBox, QDoubleSpinBox, QSlider,
-    QHBoxLayout, QVBoxLayout, QToolBar, QAction, QStatusBar,
-    QDialog, QDialogButtonBox, QFileDialog, QWidget, QProgressBar
+    QLineEdit, QSpinBox, QDoubleSpinBox, QSlider, QGroupBox,
+    QHBoxLayout, QVBoxLayout, QToolBar, QAction, QStatusBar, QScrollArea,
+    QDialog, QDialogButtonBox, QFileDialog, QWidget, QProgressBar,
+    QPushButton
 )
 from PyQt5.QtCore import ( 
     Qt, QRect, QObject, QThread, pyqtSignal,QTimer
@@ -59,6 +60,11 @@ class CanvasWidget(QWidget):
 
         self.lifeformImages = []
         lifeforms = ['ameba64', 'flower64' , 'isu64', 'mandel64',  'peace64']
+        self.lifeformBgColors = [ int("0x99ccff",16), 
+                                 int("0xf9c8d8",16),
+                                  int("0xffffff",16),
+                                  int("0x076fc2",16),
+                                  int("0x9dd05b",16)]
         if args.verbose:
             print("Loading Images...")
         for pname in lifeforms:
@@ -80,9 +86,26 @@ class CanvasWidget(QWidget):
     def mousePressEvent(self,event):
         self.mouseClick = True
 
-    def DrawLife(self,x,y,w,h,lifeform_num):
+    def DrawLife(self,x,y):
         qp_pm = QPainter(self.cvs)
-        qp_pm.drawPixmap(x,y,w,h,self.lifeform_num)
+        i_num = self.parent.life_item_num
+        side = self.parent.viewPixelsPerLifeSide
+        qp_pm.drawPixmap(x,y,side,side,self.lifeformImages[i_num])
+        qp_pm.end()
+        self.repaint()
+
+    def DrawBg(self,x,y):
+        qp_pm = QPainter(self.cvs)
+        i_num = self.parent.life_item_num
+        color = self.lifeformBgColors[inum]
+        red =  (color >> 16) & int("0xff",16)
+        green =  (color >> 8) & int("0xff",16)
+        blue =  color & int("0xff",16)
+        qcolor = QColor(red,green,blue)
+        qp_pm.setPen(QPen(qcolor))
+        qp_pm.setBrush(QBrush(qcolor, Qt.SolidPattern))
+        side = self.parent.viewPixelsPerLifeSide
+        qp_pm.drawRect(x,y,side,side)
         qp_pm.end()
         self.repaint()
 
@@ -96,6 +119,28 @@ class CanvasWidget(QWidget):
         else:
             return(False)
 
+    def Calcy(self,row):
+        y_pos = self.parent.viewFirstRow * self.parent.viewPxPerCellSide
+        y_pos = y_pos + row * self.parent.viewPxPerCellSide
+        return (y_pos)
+
+    def CalcX(self,col):
+        x_pos = self.parent.viewFirstCol * self.parent.viewPxPerCellSide
+        x_pos = x_pos + col * self.parent.viewPxPerCellSide
+        return (x_pos)
+       
+    def DrawCurGen(self):
+        for row in range(0,self.parent.viewCellsPerSide):
+            for col in range(0,self.parent.viewCellsPerSide):
+                check_col = col + self.parent.viewFirstCol
+                check_row = row + self.parent.viewFirstRow
+                y = self.CalcY(row)
+                x = self.CalcX(col)
+                if(self.parent.pool[row][col] != 0):
+                    self.DrawLife(x,y)
+                else:
+                    self.DrawBg(x,y)
+
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -106,21 +151,60 @@ class AboutDialog(QDialog):
 
         self.buttonBox = QDialogButtonBox(QBtn)
         self.buttonBox.accepted.connect(self.accept)
-
+ 
         self.layout = QVBoxLayout()
+        self.groupBox = QGroupBox("Group Box")
+        self.scroll = QScrollArea()
+        self.layout2 = QVBoxLayout()
+
 
         message_str = "Life Simulator\nVersion: %s\n" % (__version__)
         message_str = message_str + "Copyright 2023 Craig Warner all rights reserved."
         message = QLabel(message_str)
-        self.layout.addWidget(message)
+
+        message_str2 = "<p>Life is a mathematical game that simulates a colony of single celled animals.  You, the user of the \"Life\" simulator, input the initial location, in the two dimensional world, of the single celled animals.  You then can advance time to see the fate of the colony.</P>\n<P> The game \"Life\" was invented in 1970 by the Cambridge University mathematician John Conway.</P>"
+        message2 = QLabel(message_str2)
+        # making it multi line
+        message2.setWordWrap(True)
+
+        message3_str = "<font size=\"1\"> \n<p>\nThis is the algorithm \"Life\" uses for determining the population of the world in the next generation.\n  </p>\n</font size>\n<font size=\"1\">\n <PRE>  \nfor(x=0 to maxX) {\n for(y=0 to maxY) {\n  world[x][y][nxt_gen]=DEAD;\n  if(world[x][y][now] == LIVE)\n   if(2 or 3 live neighbors) \n    world[x][y][nxt_gen]=LIVE;  \n  else    \n    if(3 live neighbors)     \n     world[x][y][nxt_gen]=LIVE;\n }\n}\n  </PRE> </font size>  "
+        message3 = QLabel(message3_str)
+
+        self.layout2.addWidget(message)
+        self.layout2.addWidget(message2)
+        self.layout2.addWidget(message3)
+
+        self.groupBox.setLayout(self.layout2)
+        self.scroll.setWidget(self.groupBox)
+
+        self.layout.addWidget(self.scroll)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
 
-class SettingsDialog(QDialog):
-    def __init__(self):
-        super().__init__()
+class TimeSettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-        self.setWindowTitle("Life Simulator Settings")
+        self.parent= parent
+        self.setWindowTitle("Life Simulator Settings: Time ")
+
+
+        message_str = "Select the rate at which the Life Simulator advances to the next generation"
+        time_label = QLabel(message_str)
+
+        self.descriptions = [
+            "100 micro-seconds",
+            "1 second",
+            "10 seconds"]
+
+        all_time_items = []
+        self.time_list_widget =  QListWidget(self)
+        for d in self.descriptions:
+            all_time_items.append(QListWidgetItem(d))    
+        for di in all_time_items:
+            self.time_list_widget.addItem(di)
+        self.time_list_widget.setCurrentRow(parent.time_item_num)
+        self.time_list_widget.itemSelectionChanged.connect(self.doChangeSelection)
 
         QBtn = QDialogButtonBox.Ok 
 
@@ -128,16 +212,147 @@ class SettingsDialog(QDialog):
         self.buttonBox.accepted.connect(self.accept)
 
         self.layout = QVBoxLayout()
+        self.layout.addWidget(time_label)
+        self.layout.addWidget(self.time_list_widget)
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
+
+    def doChangeSelection(self):
+        time_item_num = self.time_list_widget.currentRow()
+        self.parent.time_item_num = time_item_num
+        if(time_item_num == 0):
+            self.parent.ticks_per_step = 1
+        elif(time_item_num == 1):
+            self.parent.ticks_per_step = 10
+        elif(time_item_num == 2):
+            self.parent.ticks_per_step = 100
+
+
+class LifeSettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.parent= parent
+        self.setWindowTitle("Life Simulator Settings: Life")
+
+        message_str = "Select the images which represents life"
+        life_label = QLabel(message_str)
+
+        self.descriptions = [
+            "Ameba",
+            "Flower",
+            "Bird",
+            "Mandelbrot Image",
+            "Peace Symbol" ]
+
+        all_life_items = []
+        self.life_list_widget =  QListWidget(self)
+        for d in self.descriptions:
+            all_life_items.append(QListWidgetItem(d))    
+        for di in all_life_items:
+            self.life_list_widget.addItem(di)
+        self.life_list_widget.setCurrentRow(parent.life_item_num)
+        self.life_list_widget.itemSelectionChanged.connect(self.doChangeSelection)
+
+        QBtn = QDialogButtonBox.Ok 
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(life_label)
+        self.layout.addWidget(self.life_list_widget)
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)
+
+    def doChangeSelection(self):
+        life_item_num = self.life_list_widget.currentRow()
+        self.parent.life_item_num = life_item_num
+
+class InitialSettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.parent= parent
+        self.setWindowTitle("Life Simulator Settings: Initial Life")
+
+        message_str = "Select initial life pattern"
+        initial_label = QLabel(message_str)
+
+        self.descriptions = [
+            "Random",
+            "Gliders",
+            "Glider Gun",
+            "Pulsars"]
+
+        all_initial_items = []
+        self.initial_list_widget =  QListWidget(self)
+        for d in self.descriptions:
+            all_initial_items.append(QListWidgetItem(d))    
+        for di in all_initial_items:
+            self.initial_list_widget.addItem(di)
+        self.initial_list_widget.setCurrentRow(parent.time_item_num)
+        self.initial_list_widget.itemSelectionChanged.connect(self.doChangeSelection)
+
+        QBtn = QDialogButtonBox.Ok 
+
+        self.buttonBox = QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(initial_label)
+        self.layout.addWidget(self.initial_list_widget)
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)        
+  
+        # adding signal and slot 
+        self.pushButton.clicked.connect(self.changelabeltext)
+
+    def doChangeSelection(self):
+        initial_item_num = self.initial_list_widget.currentRow()
+        self.parent.initial_item_num = initial_item_num
 
 class MainWindow(QMainWindow):
 
     def __init__(self,topPath,width,height):
         super(MainWindow, self).__init__()
 
+        self.cellsPerSide = 128 
+
+        self.initial_pool = []
+        self.pool = []
+        self.next_gen_pool = []
+        for row in range(0,self.cellsPerSide):
+            ia_row = []
+            a_row = []
+            nga_row = []
+            for col in range(0,self.cellsPerSide):
+                ia_row.append(0)
+                a_row.append(0)
+                nga_row.append(0)
+            self.pool.append(ia_row)
+            self.pool.append(a_row)
+            self.pool.append(nga_row)
+
         self.screenWidth = width
         self.screenHeight= height 
+
+        #  View 
+        self.zoomValue = 1
+        if(width > height):
+            minPxPerSide = height // self.cellsPerSide
+        else:
+            print("Screen Size Not Supported")
+            exit(1)
+
+        self.viewPxPerCellSide = minPxPerSide * 2 
+        self.viewCellsPerSide = 64
+        self.viewFirstCol= 64
+        self.viewFirstRol= 64
+
+        self.poolWidth = self.viewPxPerCellSide * self.viewCellsPerSide
+        self.poolHeight= self.poolWidth
+
         # Interval Timer Tick
         self.iTick = 0
         # Other variables
@@ -145,7 +360,20 @@ class MainWindow(QMainWindow):
         self.bShowIntro = True,
         self.canvasWidth = self.screenWidth -100  
         self.canvasHeight = self.screenHeight -100 
-        # Pattern
+        # Life
+        self.life_item_num = 0
+        self.noLifeReset = True
+        self.noChangeReset = True
+        self.wrapX = False
+        self.wrapY = False
+        # Time
+        self.time_item_num = 1
+        self.ticks_per_step = 10
+        self.singleStep = False
+        self.timeStopped = False
+        # Initial Pattern
+        self.initial_item_num = 0
+        self.initial_random_thresh = 90 # 1 - 99; higher less life 
         self.LoadPatterns()
         # Start the GUI 
         self.initUI()
@@ -164,9 +392,13 @@ class MainWindow(QMainWindow):
 
     def createActions(self):
         self.playAction= QAction()
-        self.playAction.setText("Play")
-        self.settingsAction= QAction()
-        self.settingsAction.setText("Settings")
+        self.playAction.setText("Simulate")
+        self.timeSettingsAction= QAction()
+        self.timeSettingsAction.setText("Time Settings")
+        self.lifeSettingsAction= QAction()
+        self.lifeSettingsAction.setText("Life Settings")
+        self.initialSettingsAction= QAction()
+        self.initialSettingsAction.setText("Initial Settings")
         self.exitAppAction= QAction()
         self.exitAppAction.setText("Quit")
 
@@ -178,7 +410,11 @@ class MainWindow(QMainWindow):
         menu = self.menuBar()
         file_menu = menu.addMenu("&File")
         file_menu.addAction(self.playAction)
-#        file_menu.addAction(self.settingsAction)
+        file_menu.addAction(self.timeSettingsAction)
+        file_menu.addAction(self.lifeSettingsAction)
+        file_menu.addAction(self.initialSettingsAction)
+        file_menu.addSeparator()
+        file_menu.addAction(self.aboutAction)
         file_menu.addSeparator()
         file_menu.addAction(self.exitAppAction)
 
@@ -186,7 +422,9 @@ class MainWindow(QMainWindow):
         help_menu.addAction(self.aboutAction)
 
         self.playAction.triggered.connect(self.doPlay)
-#        self.settingsAction.triggered.connect(self.doSettings)
+        self.timeSettingsAction.triggered.connect(self.doTimeSettings)
+        self.lifeSettingsAction.triggered.connect(self.doLifeSettings)
+        self.initialSettingsAction.triggered.connect(self.doInitialSettings)
         self.exitAppAction.triggered.connect(self.doExitApp)
         self.aboutAction.triggered.connect(self.doAbout)
 
@@ -197,10 +435,22 @@ class MainWindow(QMainWindow):
         if(args.verbose):
             print("Play")
 
-    def doSettings(self):
+    def doTimeSettings(self):
         if(args.verbose):
-            print("Settings")
-        dlg = SettingsDialog(self)
+            print("Time Settings")
+        dlg = TimeSettingsDialog(self)
+        dlg.exec()
+
+    def doLifeSettings(self):
+        if(args.verbose):
+            print("Life Settings")
+        dlg = LifeSettingsDialog(self)
+        dlg.exec()
+
+    def doInitialSettings(self):
+        if(args.verbose):
+            print("Initial Settings")
+        dlg = InitialSettingsDialog(self)
         dlg.exec()
 
     def doExitApp(self):
@@ -215,10 +465,43 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def addBody(self):
+        hbox1 = QtWidgets.QHBoxLayout()
         vbox1 = QtWidgets.QVBoxLayout()
-        self.canvas = CanvasWidget(self,self.canvasWidth, self.canvasHeight)
-        vbox1.addWidget(self.canvas)
-        self.wid.setLayout(vbox1)
+
+        # Up Button
+        self.upButton = QPushButton("Up")
+        self.upButton.clicked.connect(self.DoMoveUp)
+        vbox1.addWidget(self.upButton)
+
+        # Down Button
+        self.downButton = QPushButton("Down")
+        self.downButton.clicked.connect(self.DoMoveDown)
+        vbox1.addWidget(self.downButton)
+
+        # Left Button
+        self.leftButton = QPushButton("Left")
+        self.leftButton.clicked.connect(self.DoMoveLeft)
+        vbox1.addWidget(self.leftButton)
+
+        # Right Button
+        self.rightButton = QPushButton("Right")
+        self.rightButton.clicked.connect(self.DoMoveRight)
+        vbox1.addWidget(self.rightButton)
+
+        # Zoom In
+        self.zoomInButton = QPushButton("Zoom In")
+        self.zoomInButton.clicked.connect(self.DoZoomIn)
+        vbox1.addWidget(self.zoomInButton)
+
+        # Zoom Out 
+        self.zoomOutButton = QPushButton("Zoom Out")
+        self.zoomOutButton.clicked.connect(self.DoZoomOut)
+        vbox1.addWidget(self.zoomOutButton)
+
+        self.canvas = CanvasWidget(self,self.poolWidth, self.poolHeight)
+        hbox1.addWidget(self.canvas)
+        hbox1.addLayout(vbox1)
+        self.wid.setLayout(hbox1)
 
 
     def initTick(self):
@@ -226,8 +509,7 @@ class MainWindow(QMainWindow):
         self.iTick = 0
         self.timer = QTimer()
         self.timer.timeout.connect(self.DoTick)  # execute `display_time`
-#        self.timer.setInterval(1000)  # 1000ms = 1s
-        self.timer.setInterval(100)  # 1000ms = 1s
+        self.timer.setInterval(100)  # 100ms
         self.timer.start()
         self.mode = Mode.Seed
 
@@ -238,7 +520,6 @@ class MainWindow(QMainWindow):
         self.pattern_glider_gun= hjson.load(open(fname))
         fname = topPath + "patterns/pulsars.hjson"
         self.pattern_pulsars= hjson.load(open(fname))
-           
 
     def DoTick(self):
         #print("Tick", self.iTick)
@@ -251,10 +532,175 @@ class MainWindow(QMainWindow):
         elif self.mode == Mode.Play:
             if(self.iTick == 0):
                 self.ClearCanvas(); 
-                # Touch Screen to Start
             else:
-                self.ClearCanvas(); 
+                if(self.ticks_per_step == 1) :
+                    self.DoStep()
+                else:
+                    if((self.iTick % self.ticks_per_step) == 0):
+                        self.DoStep()
             self.iTick = self.iTick + 1 
+
+    def DoStep(self):
+        if(args.verbose):
+            print("Step")
+
+    def DrawCurrentGen(self):
+        self.canvas.DrawCurrentGen()
+
+    def DoMoveLeft(self):
+        if(args.verbose):
+            print("Move Left")
+        if(self.viewFirstCol > 0 ): 
+            self.viewFirstCol = self.viewFirstCol - 1 
+        self.DrawCurrentGen()
+
+    def DoMoveRight(self):
+        if(args.verbose):
+            print("Move Right")
+        if(self.viewFirstCol+ self.viewCellsPerSide  < self.cellsPerSide): 
+            self.viewFirstCol = self.viewFirstCol - 1 
+        self.DrawCurrentGen()
+
+    def DoMoveUp(self):
+        if(args.verbose):
+            print("Move Up")
+        if(self.viewFirstRow > 0 ): 
+            self.viewFirstRow = self.viewFirstRow- 1 
+        self.DrawCurrentGen()
+
+    def DoMoveDown(self):
+        if(args.verbose):
+            print("Move Down")
+        if(self.viewFirstRow + self.viewCellsPerSide  < self.cellsPerSide): 
+            self.viewFirstRow = self.viewFirstRow+ 1 
+        self.DrawCurrentGen()
+
+    def DoZoomOut(self):
+        if(args.verbose):
+            print("Zoom Out")
+        if(self.zoomValue > 0 ): 
+            self.viewCellsPerSide = self.viewCellsPerSide // 2 
+            self.zoomValue = self.zoomValue - 1
+        # Adjust to not roll off edge
+        if(self.viewFirstCol + self.viewCellsPerSide > self.cellsPerSide):
+            self.viewFirstCol = self.cellsPerSide - self.viewCellsPerSide
+        if(self.viewFirstRow + self.viewCellsPerSide > self.cellsPerSide):
+            self.viewFirstRow = self.cellsPerSide - self.viewCellsPerSide
+        self.DrawCurrentGen()
+
+    def DoZoomIn(self):
+        if(args.verbose):
+            print("Zoom In")
+        if(self.zoomValue < 4 ): 
+            self.viewCellsPerSide = self.viewCellsPerSide * 2 
+            self.zoomValue = self.zoomValue + 1
+        self.DrawCurrentGen()
+
+    def ClearCanvas(self):
+        if(args.verbose):
+            print("Clear Canvas")
+        self.canvas.ClearCanvas()
+
+    # nextGen - Adv Gen, else reset
+    def UpdatePool(self,nextGen):
+        for row in range (0,self.cellsPerSide):
+            for col in range (0,self.cellsPerSide):
+                if(nextGen): # Next Gen
+                    self.pool[row][col] = self.next_gen_pool[row][col]
+                else:
+                    # Reset
+                    if(self.initial_item_num == 0):
+                        rand_num = random.randrange(0,100)
+                        if( rand_num > self.initial_random_thresh):
+                            self.pool[row][col] = 1
+                        else:
+                            self.pool[row][col] = 0
+                    elif(self.initial_item_num == 1):
+                        self.pool[row][col] = self.pattern_gliders[row][col]
+                    elif(self.initial_item_num == 2):
+                        self.pool[row][col] = self.pattern_glider_gun[row][col]
+                    elif(self.initial_item_num == 3):
+                        self.pool[row][col] = self.pattern_pulsars[row][col]
+
+    # 
+    # The John Conway Life Algorithm
+    # 
+    def AdvanceOneGen(self):
+        noChange=True
+        noLife=True
+        sum = 0
+        for y in range (0,self.cellsPerSide):
+            for x in range (0,self.cellsPerSide):
+                sum = 0
+                sum+=self.TestPoint(x-1,y-1)
+                sum+=self.TestPoint(x-1,y)
+                sum+=self.TestPoint(x-1,y+1)
+                sum+=self.TestPoint(x,y-1)
+                sum+=self.TestPoint(x,y+1)
+                sum+=self.TestPoint(x+1,y-1)
+                sum+=self.TestPoint(x+1,y)
+                sum+=self.TestPoint(x+1,y+1)
+
+        if(self.pool[x][y] == 1):
+            if((sum == 2) or (sum == 3)):
+                noLife = False
+                self.next_gen_pool[x][y] = 1
+            else:
+                noChange = False
+                self.next_gen_pool[x][y] = 0
+        else:
+            if(sum == 3):
+                noLife = False
+                noChange = False
+                self.next_gen_pool[x][y] = 1
+            else:
+                self.NextGen[x][y] = 0
+	    # No Life Reset
+        if((self.noLifeReset == True) and (noLife == True)):
+            self.UpdatePool(False)
+	    # No Change Reset
+        elif((self.noChangeReset == True) and (noChange == True)):
+            self.UpdatePool(False)
+        else:
+	    # Move Next Gen to Current Gen
+            self.UpdatePool(True)
+
+    def TestPoint(self,x,y):
+#	    ForceZero = False
+        if x<0 :
+            if(self.wrapX == False):
+                realx = 0
+                ForceZero = True
+            else:
+                realx = self.cellsPerSide-1
+        elif (x > (self.cellsPerSide-1)):
+            if(self.wrapX == False):
+                realx = 0
+                ForceZero = True
+            else:
+                realx = 0
+        else:
+            realx = x
+	    #Boundary check Y
+        if(y<0):
+            if(self.wrapY == False):
+                realy = 0
+                ForceZero = True
+            else: 
+                realy = self.cellsPerSide-1
+        elif (y > (self.cellsPerSide-1)):
+            if(self.wrapY == False):
+                realy = 0
+                ForceZero = True
+            else:
+                realy = 0
+        else:
+            realy = y
+        if(ForceZero == True):
+            return(0)
+        else:
+            return (self.pool[realx][realy])
+
 #
 # Helper Functions 
 #
@@ -266,8 +712,8 @@ def playLife():
 #
 # mbg Start
 #
-#topPath = "/home/craigwarner/Programming/lv4/life-sim/"
-topPath = "/snap/life-sim/current/"
+topPath = "/home/craigwarner/Programming/lv4/life-sim/"
+#topPath = "/snap/life-sim/current/"
 
 # CLI Parser
 parser = argparse.ArgumentParser(description='Life Simulator')
