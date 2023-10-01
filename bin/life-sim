@@ -61,7 +61,7 @@ class CanvasWidget(QWidget):
         self.lifeformImages = []
         lifeforms = ['ameba64', 'flower64' , 'isu64', 'mandel64',  'peace64']
         self.lifeformBgColors = [ int("0x99ccff",16), 
-                                 int("0xf9c8d8",16),
+                                  int("0xf9c8d8",16),
                                   int("0xffffff",16),
                                   int("0x076fc2",16),
                                   int("0x9dd05b",16)]
@@ -88,6 +88,20 @@ class CanvasWidget(QWidget):
 
     def mousePressEvent(self,event):
         self.mouseClick = True
+        self.point_set_x = event.pos().x()
+        self.point_set_y = event.pos().y()
+        #canvas_x = self.point_set_x - 100
+        #canvas_y = self.point_set_y - 100
+        canvas_x = self.point_set_x
+        canvas_y = self.point_set_y
+        pool_x = canvas_x // self.parent.viewPxPerCellSide + self.parent.viewFirstCol
+        pool_y = canvas_y // self.parent.viewPxPerCellSide + self.parent.viewFirstRow
+        print("mouse click: row:",pool_y," col:", pool_x)
+        if(self.parent.pool[pool_y][pool_x] > 0 ):
+            self.parent.pool[pool_y][pool_x] = 0
+        else: 
+            self.parent.pool[pool_y][pool_x] = 1
+        self.parent.DrawCurrentGen()
 
     def DrawLife(self,x,y):
         i_num = self.parent.life_item_num
@@ -297,7 +311,7 @@ class InitialSettingsDialog(QDialog):
             all_initial_items.append(QListWidgetItem(d))    
         for di in all_initial_items:
             self.initial_list_widget.addItem(di)
-        self.initial_list_widget.setCurrentRow(parent.time_item_num)
+        self.initial_list_widget.setCurrentRow(self.parent.initial_item_num)
         self.initial_list_widget.itemSelectionChanged.connect(self.doChangeSelection)
 
         QBtn = QDialogButtonBox.Ok 
@@ -343,8 +357,8 @@ class MainWindow(QMainWindow):
 
         #  View 
         self.viewCellsPerSide = 64
-        self.viewFirstCol= 64
-        self.viewFirstRow= 64
+        self.viewFirstCol= 0  
+        self.viewFirstRow= 0 
 
         self.zoomValue = 1
         if(width < height):
@@ -582,7 +596,7 @@ class MainWindow(QMainWindow):
         if(args.verbose):
             print("Move Right")
         if(self.viewFirstCol+ self.viewCellsPerSide  < self.cellsPerSide): 
-            self.viewFirstCol = self.viewFirstCol - 1 
+            self.viewFirstCol = self.viewFirstCol + 1 
         self.DrawCurrentGen()
 
     def DoMoveUp(self):
@@ -659,7 +673,9 @@ class MainWindow(QMainWindow):
                             self.pool[row][col] = 0
                     elif(self.initial_item_num == 1):
                         self.pool[row][col] = self.pattern_gliders["pattern"][row][col]
+#                        print("gl:r:",row,"c:",col)
                     elif(self.initial_item_num == 2):
+#                        print("r:",row,"c:",col)
                         self.pool[row][col] = self.pattern_glider_gun["pattern"][row][col]
                     elif(self.initial_item_num == 3):
                         self.pool[row][col] = self.pattern_pulsars["pattern"][row][col]
